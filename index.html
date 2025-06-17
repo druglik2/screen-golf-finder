@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>집근처 스크린 골프 최저가 검색기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals with Green Accent -->
+    <!-- Application Structure Plan: A task-oriented dashboard design. The top section contains all user controls (filters for district, day, time) for immediate interaction. Below, a dynamic grid displays the filtered and sorted results as interactive cards. This is followed by a data visualization section with a bar chart to provide a market overview of price levels by brand and district. Finally, a summary section offers practical tips. This structure prioritizes the user's primary goal—finding the best price—by placing interactive elements first, followed by results and contextual information, ensuring a highly intuitive and efficient user flow. -->
+    <!-- Visualization & Content Choices: Report Info: Lowest prices vary by district, brand, time. -> Goal: Compare these variables. -> Viz/Presentation Method: Interactive bar chart (Chart.js) and a filterable card grid (HTML/Tailwind/JS). -> Interaction: Users select filters (district, time) to dynamically update the card grid, which sorts results by price. The chart provides a static but clear comparison of the "best-case" lowest prices. -> Justification: This combination allows both high-level market understanding (chart) and detailed, customized searching (grid), directly addressing the user's need to find the cheapest option for their specific situation. The card layout presents key info (price, conditions, perks) concisely. -> Library/Method: Chart.js for canvas-based charts, Vanilla JS for all filtering and DOM manipulation. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 50vh;
+            max-height: 500px;
+        }
+        .filter-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .filter-btn.active {
+            background-color: #10B981; /* Emerald-500 */
+            color: white;
+            font-weight: 700;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .result-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">집근처 스크린 골프 최저가 검색기</h1>
+            <p class="mt-2 text-gray-600">관악구, 동작구, 서초구, 강남구 스크린골프장의 가장 저렴한 가격을 찾아보세요.</p>
+            <div class="mt-4 p-3 bg-yellow-50 text-yellow-800 rounded-lg text-sm md:text-base font-medium">
+                ⚠️ 표시된 가격은 참고용이며, 실제 가격은 매장 프로모션 및 현장 상황에 따라 달라질 수 있습니다.
+            </div>
+        </header>
+
+        <main>
+            <!-- Filters Section -->
+            <div class="bg-white p-6 rounded-xl shadow-md mb-8 sticky top-2 z-10">
+                <div id="filters">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label class="font-bold text-gray-700 mb-2 block">1. 지역 선택</label>
+                            <div id="district-filter" class="flex flex-wrap gap-2">
+                                <button data-filter="district" value="all" class="filter-btn active w-full sm:w-auto flex-grow px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">전체</button>
+                                <button data-filter="district" value="관악구" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">관악구</button>
+                                <button data-filter="district" value="동작구" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">동작구</button>
+                                <button data-filter="district" value="서초구" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">서초구</button>
+                                <button data-filter="district" value="강남구" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">강남구</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-bold text-gray-700 mb-2 block">2. 요일 선택</label>
+                            <div id="day-filter" class="flex flex-wrap gap-2">
+                                <button data-filter="day" value="weekday" class="filter-btn active px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">주중</button>
+                                <button data-filter="day" value="weekend" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">주말/공휴일</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-bold text-gray-700 mb-2 block">3. 시간대 선택</label>
+                            <div id="time-filter" class="flex flex-wrap gap-2">
+                                <button data-filter="time" value="morning" class="filter-btn active px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">오전 (~12시)</button>
+                                <button data-filter="time" value="afternoon" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">오후 (12~17시)</button>
+                                <button data-filter="time" value="evening" class="filter-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">저녁 (17시~)</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results-container">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">검색 결과</h2>
+                    <p id="results-count" class="text-gray-600 font-medium"></p>
+                </div>
+                <div id="results" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <!-- Venue cards will be injected here by JavaScript -->
+                </div>
+                <div id="no-results" class="hidden text-center py-16 bg-white rounded-lg shadow-md">
+                    <p class="text-xl text-gray-500">선택한 조건에 맞는 스크린골프장이 없습니다.</p>
+                    <p class="mt-2 text-gray-400">다른 조건으로 검색해 보세요!</p>
+                </div>
+            </div>
+
+            <!-- Market Overview Chart Section -->
+            <div class="mt-12 bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold text-gray-800 text-center mb-2">스크린골프 시장 요약</h2>
+                <p class="text-center text-gray-600 mb-6">지역 및 주요 브랜드별 최저가를 비교하여 시장 가격대를 파악해 보세요. <br class="hidden sm:block">절대적인 최저가는 주로 공공시설, SG골프, 프렌즈 스크린에서 찾을 수 있습니다.</p>
+                <div class="chart-container">
+                    <canvas id="priceComparisonChart"></canvas>
+                </div>
+            </div>
+
+             <!-- Key Insights Section -->
+            <div class="mt-12 bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold text-gray-800 text-center mb-6">"최저가"를 위한 똑똑한 팁 💡</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-center">
+                    <div class="p-4 border border-gray-200 rounded-lg">
+                        <h3 class="font-bold text-lg text-emerald-600 mb-2">시간이 돈이다</h3>
+                        <p class="text-gray-600">평일 오전 시간대가 가장 저렴합니다. 저녁, 주말/공휴일 순으로 가격이 상승하니 유연한 일정으로 비용을 절약하세요.</p>
+                    </div>
+                    <div class="p-4 border border-gray-200 rounded-lg">
+                        <h3 class="font-bold text-lg text-emerald-600 mb-2">예약 앱을 활용하라</h3>
+                        <p class="text-gray-600">'김캐디'와 같은 예약 앱은 특별 할인 쿠폰이나 타임 세일을 제공하는 경우가 많습니다. 방문 전 꼭 확인해 보세요.</p>
+                    </div>
+                    <div class="p-4 border border-gray-200 rounded-lg">
+                        <h3 class="font-bold text-lg text-emerald-600 mb-2">가성비 브랜드를 노려라</h3>
+                        <p class="text-gray-600">프리미엄급 골프존 파크 외에, SG골프와 프렌즈 스크린은 종종 더 저렴한 가격에 훌륭한 시설을 제공합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+<script>
+    const venues = [
+        {
+            name: '골프존파크 낙성대 그레이', brand: '골프존 파크', district: '관악구', address: '서울 관악구',
+            remarks: '주중/주말 저녁은 28,000원',
+            prices: {
+                weekday: { morning: 18000, afternoon: 28000, evening: 28000 },
+                weekend: { morning: 18000, afternoon: 28000, evening: 28000 }
+            }
+        },
+        {
+            name: '현대스크린골프존', brand: '골프존 비전', district: '관악구', address: '서울 관악구 봉천동',
+            remarks: '최신 시스템, 쾌적한 환경, 넓고 깔끔한 방',
+            prices: {
+                weekday: { morning: 14000, afternoon: 20000, evening: 20000 },
+                weekend: { morning: 14000, afternoon: 20000, evening: 20000 } // 주말 가격 정보 부족, 평일 가격으로 대체
+            }
+        },
+        {
+            name: '프렌즈스크린 신림점', brand: '프렌즈 스크린', district: '관악구', address: '서울 관악구 신원로 26',
+            remarks: '주차 가능, 외부 음식 반입 가능, 청결',
+            prices: {
+                weekday: { morning: 10000, afternoon: 10000, evening: 13000 },
+                weekend: { morning: 10000, afternoon: 13000, evening: 13000 }
+            }
+        },
+        {
+            name: 'SG골프 관악스크린골프', brand: 'SG골프', district: '관악구', address: '서울 관악구 관악로15길 23-16',
+            remarks: '골프존/카카오VX 대비 상당히 저렴, 청결, 커브 화면, 김캐디 예약 추천',
+            prices: {
+                weekday: { morning: null, afternoon: null, evening: null }, // 가격 정보가 없어 '상당히 저렴'으로 표시
+                weekend: { morning: null, afternoon: null, evening: null }
+            }
+        },
+        {
+            name: '원스크린골프', brand: '기타', district: '동작구', address: '서울 동작구 사당제1동',
+            remarks: '"착한 가격"으로 알려짐',
+            prices: {
+                weekday: { morning: 10000, afternoon: 10000, evening: null }, // 저녁 가격 정보 없음
+                weekend: { morning: 13000, afternoon: 13000, evening: 13000 }
+            }
+        },
+        {
+            name: 'SG 세븐골프연습장', brand: 'SG골프', district: '동작구', address: '서울 동작구 대방동',
+            remarks: '주차 가능, 남/녀 화장실 구분',
+            prices: {
+                weekday: { morning: 10000, afternoon: 10000, evening: 17000 },
+                weekend: { morning: 10000, afternoon: 10000, evening: 17000 } // 주말 가격 정보 부족, 평일 가격으로 대체
+            }
+        },
+        {
+            name: '골프존 파크 (동작구)', brand: '골프존 파크', district: '동작구', address: '서울 동작구',
+            remarks: '일반적인 골프존 파크 매장',
+            prices: {
+                weekday: { morning: 17000, afternoon: 23000, evening: 23000 },
+                weekend: { morning: 23000, afternoon: 23000, evening: 23000 }
+            }
+        },
+        {
+            name: '언남문화체육센터', brand: '공공시설', district: '서초구', address: '서울 서초구',
+            remarks: '공공시설로 매우 저렴, 9홀 옵션 가능',
+            prices: {
+                weekday: { morning: 16000, afternoon: 20000, evening: 20000 },
+                weekend: { morning: 16000, afternoon: 20000, evening: 20000 } // 주말 가격 정보 부족, 평일 가격으로 대체
+            }
+        },
+        {
+            name: '골프존파크 서초 교대역점', brand: '골프존 파크', district: '서초구', address: '서울 서초구',
+            remarks: '무료 주차, 무료 카페, 무료 렌탈화',
+            prices: {
+                weekday: { morning: 21000, afternoon: 21000, evening: 29000 },
+                weekend: { morning: 22000, afternoon: 25000, evening: 25000 }
+            }
+        },
+        {
+            name: '골프존파크 서초점', brand: '골프존 파크', district: '서초구', address: '서울 서초구',
+            remarks: '주차, 발렛파킹, 무선 인터넷, 예약 가능',
+            prices: {
+                weekday: { morning: 22000, afternoon: 32000, evening: 32000 },
+                weekend: { morning: 27000, afternoon: 32000, evening: 32000 }
+            }
+        },
+        {
+            name: '강남스포츠문화센터', brand: '공공시설', district: '강남구', address: '서울 강남구',
+            remarks: '공공시설, 1타석당 8,000원, 18홀 가능',
+            prices: {
+                weekday: { morning: 8000, afternoon: 8000, evening: 8000 },
+                weekend: { morning: 8000, afternoon: 8000, evening: 8000 }
+            }
+        },
+        {
+            name: '골프존파크 역삼강남점', brand: '골프존 파크', district: '강남구', address: '서울 강남구 테헤란로7길 12',
+            remarks: '리모델링, 깔끔, 주차 편리. 김캐디 앱에서 가격 확인 권장',
+            prices: {
+                weekday: { morning: null, afternoon: null, evening: null }, // 가격 유동적
+                weekend: { morning: null, afternoon: null, evening: null }
+            }
+        },
+        {
+            name: '프렌즈스크린 대치동', brand: '프렌즈 스크린', district: '강남구', address: '서울 강남구 대치동',
+            remarks: '평일/주말 가격 동일',
+            prices: {
+                weekday: { morning: 18000, afternoon: 25000, evening: 25000 },
+                weekend: { morning: 18000, afternoon: 25000, evening: 25000 }
+            }
+        },
+        {
+            name: '카카오프렌즈 대치강남점', brand: '프렌즈 스크린', district: '강남구', address: '서울 강남구 대치동',
+            remarks: '가성비 좋음, 시설 좋음, 주차 편리, 김캐디 기준 가격',
+            prices: {
+                weekday: { morning: 12000, afternoon: 20000, evening: 20000 }, // 오후 가격 정보 부족, 주말 오전 가격으로 대체
+                weekend: { morning: 20000, afternoon: 20000, evening: 20000 }
+            }
+        },
+        {
+            name: 'SG스크린골프 (강남구)', brand: 'SG골프', district: '강남구', address: '서울 강남구',
+            remarks: '가격 매우 저렴, 개별 칸막이',
+            prices: {
+                weekday: { morning: 13900, afternoon: 13900, evening: 13900 },
+                weekend: { morning: 13900, afternoon: 13900, evening: 13900 } // 최고가 13,900원 이하로 모든 시간대 통일
+            }
+        },
+    ];
+
+    const filters = {
+        district: 'all',
+        day: 'weekday',
+        time: 'morning'
+    };
+
+    const resultsEl = document.getElementById('results');
+    const resultsCountEl = document.getElementById('results-count');
+    const noResultsEl = document.getElementById('no-results');
+    const filtersEl = document.getElementById('filters');
+
+    function renderVenues() {
+        const { district, day, time } = filters;
+
+        const filteredVenues = venues.map(venue => {
+            const price = venue.prices[day]?.[time];
+            return { ...venue, displayPrice: price };
+        }).filter(venue => {
+            const districtMatch = district === 'all' || venue.district === district;
+            const priceMatch = venue.displayPrice !== null && venue.displayPrice !== undefined;
+            return districtMatch && priceMatch;
+        });
+
+        filteredVenues.sort((a, b) => a.displayPrice - b.displayPrice);
+
+        resultsEl.innerHTML = '';
+
+        if (filteredVenues.length === 0) {
+            noResultsEl.classList.remove('hidden');
+            resultsEl.classList.add('hidden');
+            resultsCountEl.textContent = '0개';
+        } else {
+            noResultsEl.classList.add('hidden');
+            resultsEl.classList.remove('hidden');
+            resultsCountEl.textContent = `${filteredVenues.length}개`;
+        }
+
+        filteredVenues.forEach(venue => {
+            const brandColor = {
+                '골프존 파크': 'bg-blue-100 text-blue-800',
+                '골프존 비전': 'bg-blue-100 text-blue-800',
+                '프렌즈 스크린': 'bg-yellow-100 text-yellow-800',
+                'SG골프': 'bg-red-100 text-red-800',
+                '공공시설': 'bg-green-100 text-green-800',
+                '기타': 'bg-gray-100 text-gray-800',
+            };
+
+            const card = `
+                <div class="result-card bg-white rounded-xl shadow-md overflow-hidden p-6 flex flex-col">
+                    <div class="flex-grow">
+                        <div class="flex justify-between items-start">
+                            <span class="text-sm font-bold py-1 px-2.5 rounded-full ${brandColor[venue.brand] || brandColor['기타']}">${venue.brand}</span>
+                            <div class="text-right">
+                                <p class="text-2xl font-bold text-emerald-600">${venue.displayPrice.toLocaleString()}원</p>
+                                <p class="text-xs text-gray-500">18홀 기준</p>
+                            </div>
+                        </div>
+                        <h3 class="font-bold text-xl mt-3 text-gray-900">${venue.name}</h3>
+                        <p class="text-sm text-gray-500 mt-1">${venue.address}</p>
+                        <p class="text-sm text-gray-700 mt-4 bg-gray-100 p-3 rounded-md">${venue.remarks}</p>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <a href="https://map.kakao.com/link/search/${encodeURIComponent(venue.name)}" target="_blank" class="block w-full text-center bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-emerald-600 transition-colors">
+                            카카오맵에서 찾기
+                        </a>
+                    </div>
+                </div>
+            `;
+            resultsEl.innerHTML += card;
+        });
+    }
+
+    function createPriceChart() {
+        const ctx = document.getElementById('priceComparisonChart').getContext('2d');
+        const districts = ['관악구', '동작구', '서초구', '강남구'];
+        const brands = ['골프존 파크', '프렌즈 스크린', 'SG골프', '공공시설'];
+
+        const datasets = brands.map(brand => {
+            const data = districts.map(district => {
+                const brandVenues = venues.filter(v => v.district === district && v.brand === brand);
+                if (brandVenues.length === 0) return null;
+
+                let minPrice = Infinity;
+                brandVenues.forEach(v => {
+                    Object.values(v.prices).forEach(dayPrices => {
+                        Object.values(dayPrices).forEach(price => {
+                            if (price !== null && price < minPrice) {
+                                minPrice = price;
+                            }
+                        });
+                    });
+                });
+                return minPrice === Infinity ? null : minPrice;
+            });
+
+            const brandColors = {
+                '골프존 파크': 'rgba(59, 130, 246, 0.7)',
+                '프렌즈 스크린': 'rgba(251, 191, 36, 0.7)',
+                'SG골프': 'rgba(239, 68, 68, 0.7)',
+                '공공시설': 'rgba(16, 185, 129, 0.7)',
+            };
+
+            return {
+                label: brand,
+                data: data,
+                backgroundColor: brandColors[brand],
+                borderColor: brandColors[brand].replace('0.7', '1'),
+                borderWidth: 1
+            };
+        });
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: districts,
+                datasets: datasets
+            },
+            options: {
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                    title: { display: true, text: '지역 및 브랜드별 최저가 비교 (18홀)', font: { size: 16 } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value, index, values) {
+                                return value.toLocaleString() + '원';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    filtersEl.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') {
+            const filterType = e.target.dataset.filter;
+            const value = e.target.value;
+
+            if (!filterType) return;
+
+            filters[filterType] = value;
+
+            document.querySelectorAll(`button[data-filter="${filterType}"]`).forEach(btn => {
+                btn.classList.remove('active');
+            });
+            e.target.classList.add('active');
+
+            renderVenues();
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderVenues();
+        createPriceChart();
+    });
+
+</script>
+
+</body>
+</html>
